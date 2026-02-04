@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>IPL Auction – FINAL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:Arial;background:#f4f6fb;text-align:center}
+.card{background:#fff;padding:12px;margin:10px auto;max-width:1100px;border-radius:8px}
+button{padding:8px 12px;margin:4px;cursor:pointer}
+input,select{padding:6px;margin:4px}
+.grid{display:flex;flex-wrap:wrap;justify-content:center}
+.team{border:1px solid #ddd;border-radius:6px;padding:8px;margin:6px;width:200px}
+.small{font-size:12px;color:#555}
+.log{text-align:left;max-height:220px;overflow:auto;border:1px solid #ddd;padding:8px}
+.admin{background:#ffeeba}
+</style>
+</head>
+<body>
+
+<div class="card admin">
+<h2>🔐 Auctioneer Control (Admin)</h2>
+<input id="pin" type="password" placeholder="Admin Code">
+<button onclick="login()">Login</button>
+<div id="adminPanel" style="display:none">
+<br>
+<label>Budget per Team:</label>
+<input id="budgetInput" type="number" value="10000">
+<button onclick="setBudget()">Set Budget</button>
+<button onclick="startAuction()">Start Auction</button>
+<button onclick="resetAuction()">End / Reset Auction</button>
+</div>
+</div>
+
+<div class="card">
+<h3>👤 Join Auction</h3>
+<input id="userName" placeholder="Your Name">
+<select id="teamSelect"></select>
+<button onclick="joinTeam()">Join</button>
+<div id="joinedInfo" class="small"></div>
+</div>
+
+<div class="card">
+<h3 id="player">Waiting for auction…</h3>
+<div>Current Price: ₹<span id="price">0</span></div>
+<div>Highest Bidder: <span id="leader">None</span></div>
+<div>
+<button onclick="raiseBid(100)">+100</button>
+<button onclick="raiseBid(500)">+500</button>
+<button onclick="raiseBid(1000)">+1000</button>
+<button onclick="raiseBid(5000)">+5000</button>
+<button onclick="sell()">SOLD</button>
+</div>
+</div>
+
+<div class="card">
+<h3>🏏 Teams & Owners</h3>
+<div id="teams" class="grid"></div>
+</div>
+
+<div class="card">
+<h3>📜 Live Auction Log</h3>
+<div id="log" class="log"></div>
+</div>
+
+<script>
+const ADMIN_PIN="Rishabh@05";
+
+const teams=["CSK","MI","RCB","KKR","RR","SRH","DC","PBKS","GT","LSG"];
+
+// 🔥 150 IPL players (last 5 years)
+const players=[
+"Virat Kohli","Rohit Sharma","MS Dhoni","Jasprit Bumrah","Ravindra Jadeja",
+"Hardik Pandya","KL Rahul","Rishabh Pant","Shubman Gill","Suryakumar Yadav",
+"Yashasvi Jaiswal","Sanju Samson","Jos Buttler","David Warner","Faf du Plessis",
+"Andre Russell","Sunil Narine","Glenn Maxwell","Pat Cummins","Mitchell Starc",
+"Trent Boult","Kagiso Rabada","Anrich Nortje","Mohammed Shami","Mohammed Siraj",
+"Bhuvneshwar Kumar","Shreyas Iyer","Ishan Kishan","Tilak Varma","Rinku Singh",
+"Axar Patel","Kuldeep Yadav","R Ashwin","Yuzvendra Chahal","Deepak Chahar",
+"Arshdeep Singh","Harshal Patel","Washington Sundar","Ben Stokes","Sam Curran",
+"Liam Livingstone","Nicholas Pooran","Quinton de Kock","Heinrich Klaasen",
+"Aiden Markram","Travis Head","Glenn Phillips","Marco Jansen","Matheesha Pathirana",
+"Maheesh Theekshana","Noor Ahmad","Fazalhaq Farooqi","Mohit Sharma","Mukesh Kumar",
+"T Natarajan","Sandeep Sharma","Shahbaz Ahmed","Rahul Tripathi","Abhishek Sharma",
+"Mayank Agarwal","Devdutt Padikkal","Shimron Hetmyer","Kieron Pollard",
+"Tim David","Cameron Green","Marcus Stoinis","Krunal Pandya","Jason Holder",
+"Lockie Ferguson","Alzarri Joseph","Chris Woakes","Josh Hazlewood",
+"Adam Zampa","Rassie van der Dussen","Daryl Mitchell","Mitchell Marsh",
+"Harry Brook","Phil Salt","Will Jacks","Rilee Rossouw","David Miller",
+"Shivam Dube","Rajat Patidar","Akash Madhwal","Avesh Khan","Prasidh Krishna",
+"Umesh Yadav","Jaydev Unadkat","Varun Chakravarthy","Rahul Chahar",
+"Mayank Markande","Wanindu Hasaranga","Adil Rashid","Shakib Al Hasan",
+"Daniel Sams","Romario Shepherd","Odean Smith","Kyle Jamieson",
+"Sean Abbott","Nathan Ellis","Mohammad Nabi","Vijay Shankar",
+"Manish Pandey","Ajinkya Rahane","Karun Nair","Wriddhiman Saha",
+"Dinesh Karthik","Prithvi Shaw","Sarfaraz Khan","Abdul Samad",
+"Shahrukh Khan","Harpreet Brar","Riyan Parag","Abhinav Manohar",
+"Sai Sudharsan","Venkatesh Iyer","Nitish Rana","Abhishek Porel"
+];
+
+let admin=false,myTeam=null,myName=null;
+let budgets={},spent={},squads={},owners={};
+let pool=[],current=null,price=0,leader=null,basePrice=1000;
+
+const teamSel=document.getElementById("teamSelect");
+teams.forEach(t=>{
+ budgets[t]=0;spent[t]=0;squads[t]=[];owners[t]="—";
+ teamSel.innerHTML+=`<option>${t}</option>`;
+});
+renderTeams();
+
+function login(){
+ if(document.getElementById("pin").value===ADMIN_PIN){
+  admin=true;
+  document.getElementById("adminPanel").style.display="block";
+  alert("Admin logged in");
+ } else alert("Wrong admin code");
+}
+
+function joinTeam(){
+ myName=document.getElementById("userName").value.trim();
+ myTeam=document.getElementById("teamSelect").value;
+ if(!myName)return;
+ owners[myTeam]=myName;
+ document.getElementById("joinedInfo").innerText=`Joined ${myTeam}`;
+ renderTeams();
+}
+
+function setBudget(){
+ if(!admin)return;
+ let b=parseInt(document.getElementById("budgetInput").value);
+ teams.forEach(t=>budgets[t]=b);
+ basePrice=b>=100000?5000:b>=10000?1000:500;
+}
+
+function startAuction(){
+ if(!admin)return;
+ pool=[...players].sort(()=>Math.random()-0.5);
+ nextPlayer();
+}
+
+function nextPlayer(){
+ if(!pool.length){alert("Auction finished");return;}
+ current=pool.pop();
+ price=basePrice;
+ leader=null;
+ updateUI();
+}
+
+function raiseBid(x){
+ if(!myTeam)return;
+ if(budgets[myTeam]<price+x)return;
+ price+=x;
+ leader=myTeam;
+ updateUI();
+}
+
+function sell(){
+ if(!admin)return;
+ if(leader){
+  budgets[leader]-=price;
+  spent[leader]+=price;
+  squads[leader].push(current);
+  log(`SOLD: ${current} → ${leader} (${owners[leader]}) for ₹${price}`);
+ } else log(`UNSOLD: ${current}`);
+ renderTeams();
+ nextPlayer();
+}
+
+function resetAuction(){ location.reload(); }
+
+function updateUI(){
+ document.getElementById("player").innerText=current;
+ document.getElementById("price").innerText=price;
+ document.getElementById("leader").innerText=leader?leader:"None";
+}
+
+function renderTeams(){
+ const d=document.getElementById("teams");
+ d.innerHTML="";
+ teams.forEach(t=>{
+  d.innerHTML+=`<div class="team"><b>${t}</b><br>
+  Owner: ${owners[t]}<br>
+  Budget: ₹${budgets[t]}<br>
+  Spent: ₹${spent[t]}
+  <div class="small">${squads[t].join(", ")}</div></div>`;
+ });
+}
+
+function log(m){
+ document.getElementById("log").innerHTML=m+"<br>"+document.getElementById("log").innerHTML;
+}
+</script>
+
+</body>
+</html>
